@@ -186,13 +186,13 @@ if (! $vCenter) {
 }
 
 Write-Host "Verifying connectivity to $vCenter" -ForegroundColor CYAN
-if ((Test-NetConnection -ComputerName $vcenter -InformationLevel Quiet) -eq $false) {
-    Write-Host "ERROR! Could not reach vCenter. Please verify and try again" -ForegroundColor RED
+if ((Test-Connection -ComputerName $vcenter -Quiet) -eq $false) {
+    Write-Host "  > ERROR! Could not reach vCenter. Please verify and try again" -ForegroundColor RED
     Write-Host
     write-host $LineSepDashes
     exit
 } else {
-    Write-Host "Ping to $vCenter succeeded!" -ForegroundColor GREEN
+    Write-Host "  > Ping to $vCenter succeeded!" -ForegroundColor GREEN
 }
 #EndRegion Confirm vCenter
 
@@ -212,6 +212,8 @@ if ($vCenterType -notin @("OnPrem", "VMC", "AVS", "GVCE")) {
   }
 }
 Write-Host "vCenter Type set to $vCenterType"  -ForegroundColor CYAN
+Write-Host
+
 #EndRegion vCenter Type
 
 
@@ -240,10 +242,10 @@ if ($Global:DefaultVIServers) {
     }
 }
 
-Write-Host "Connecting to vCenter at $vCenter."`n -ForeGroundColor Cyan
+Write-Host "Connecting to vCenter at $vCenter." -ForeGroundColor Cyan
 # If no credential file and no vCenter username/password provided then prompt for creds
 if ($vCenterCredFile -and ( Test-Path $vCenterCredFile) ) {
-    Write-Host "Credential file found! Connecting to vCenter" -ForegroundColor green
+    Write-Host "  > Credential file found! Connecting to vCenter" -ForegroundColor green
     $credential = Import-Clixml -Path $vCenterCredFile
     $vCenterParams = @{
         Server     = $vCenter
@@ -251,14 +253,14 @@ if ($vCenterCredFile -and ( Test-Path $vCenterCredFile) ) {
     }
 } elseif ($vCenterAdminUser -and $vCenterAdminPassword) {
     # Else if user is provided use the username and password
-    Write-Host "User and password specified! Connecting to vCenter" -ForegroundColor green
+    Write-Host "  > User and password specified! Connecting to vCenter" -ForegroundColor green
     $vCenterParams = @{
         Server     = $vCenter
         Username   = $vCenterAdminUser
         Password   = $vCenterAdminPassword
     }
 } elseif ($vCenterAdminUser) {
-    write-Host "User specified! Prompting for Password" -ForegroundColor Yellow
+    write-Host "  > User specified! Prompting for Password" -ForegroundColor Yellow
     # If username provided but not password, prompt for password
     $credential = Get-Credential -UserName $vCenterAdminUser -Message "Please enter vCenter admin credentials"
     $vCenterParams = @{
@@ -266,7 +268,7 @@ if ($vCenterCredFile -and ( Test-Path $vCenterCredFile) ) {
         Credential = $credential
     }
 } else {
-    Write-Host "No credential file found, no user/pw specified on command line, please provide vCenter Admin credentials" -ForegroundColor Yellow
+    Write-Host "  > No credential file found, no user/pw specified on command line, please provide vCenter Admin credentials" -ForegroundColor Yellow
     $credential = Get-Credential -Message "Please enter vCenter admin credentials"
     $vCenterParams = @{
         Server     = $vCenter
@@ -277,17 +279,17 @@ if ($vCenterCredFile -and ( Test-Path $vCenterCredFile) ) {
 #Connect to vCenter
 try { 
     Connect-VIServer @vCenterParams -ErrorAction stop | Out-Null
-    Write-Host "Successfully connected to vCenter $vCenter" -ForegroundColor GREEN
+    Write-Host "  > Successfully connected to vCenter $vCenter" -ForegroundColor GREEN
 } catch [VMware.VimAutomation.ViCore.Types.V1.ErrorHandling.InvalidLogin]{
-    Write-Host "ERROR! Login failed. Please confirm credentials and try again" -ForegroundColor Red
+    Write-Host "  > ERROR! Login failed. Please confirm credentials and try again" -ForegroundColor Red
     Write-Host
     write-host $LineSepDashes
     exit
 } catch {
-    Write-Host "ERROR! Connect to vCenter failed. Possible issues:" -ForegroundColor Red
-    Write-Host "  - Invalid Cert being ignored, set action via: "
-    Write-Host "       Set-PowerCLIConfiguration -InvalidCertificateAction Ignore"
-    Write-Host "  - Host not reachable. Confirm firewalls, etc"
+    Write-Host "  > ERROR! Connect to vCenter failed. Possible issues:" -ForegroundColor Red
+    Write-Host "     - Invalid Cert being ignored, set action via: "
+    Write-Host "          Set-PowerCLIConfiguration -InvalidCertificateAction Ignore" -ForegroundColor Magenta
+    Write-Host "     - Host not reachable. Confirm firewalls, etc"
     Write-Host $PSItem.Exception.Message -ForegroundColor RED
     Write-Host
     write-host $LineSepDashes
@@ -300,10 +302,9 @@ try {
 # The Rubrik User account is a non-login, least-privileged, vCenter Server account that you specify during deployment.
 if (! $RubrikServiceAccount) {
     Write-Host "Rubrik Service Account not specified. Please enter account name in full format:" -ForegroundColor yellow
-    Write-Host "Examples: " -ForegroundColor yellow
-    Write-Host "    MYDOMAIN\RubrikSvcAcct"  -ForegroundColor CYAN
-    Write-Host "    svc-Rubrik@mydomain.com" -ForegroundColor CYAN
-    Write-Host "    RubrikSvc@vsphere.local" -ForegroundColor CYAN
+    Write-Host "  > Examples:  " -ForegroundColor yellow -NoNewline
+    Write-Host "MYDOMAIN\RubrikSvcAcct  - AD account using NetBIOS name"  -ForegroundColor CYAN
+    Write-Host "               RubrikSvc@vsphere.local - VMware local SSO account" -ForegroundColor CYAN
     $RubrikServiceAccount = Read-Host "Rubrik Service Account "
 }
 
@@ -327,7 +328,7 @@ Write-Debug 'Effective privileges are:'
 Write-Debug ($Rubrik_Privileges | Format-Table | Out-String)
 
 # Create new role
-Write-Host "Creating a new role called $RubrikRoleName "`n -ForeGroundColor Cyan 
+Write-Host "Creating a new role called $RubrikRoleName " -ForeGroundColor Cyan 
 try {
     #New-VIRole -Name $RubrikRoleName -Privilege (Get-VIPrivilege -id $Rubrik_Privileges) -ErrorAction stop | Out-Null
     $null = New-VIRole -Name $RubrikRoleName -Privilege (Get-VIPrivilege -id $Rubrik_Privileges) -ErrorAction stop 
@@ -342,9 +343,9 @@ try {
 #Get the Root Folder
 $rootFolder = Get-Folder -NoRecursion
 #Create the Permission
-Write-Host "Granting permissions on object $rootFolder to $RubrikServiceAccount as role $RubrikRoleName with Propagation = $true"`n -ForeGroundColor Cyan
+Write-Host "Granting permissions on object $rootFolder to $RubrikServiceAccount as role $RubrikRoleName with Propagation = $true" -ForeGroundColor Cyan
 try {
-   New-VIPermission -Entity $rootFolder -Principal $RubrikServiceAccount -Role $RubrikRoleName -Propagate:$true -ErrorAction stop | Out-Null
+   $null = New-VIPermission -Entity $rootFolder -Principal $RubrikServiceAccount -Role $RubrikRoleName -Propagate:$true -ErrorAction stop
 } catch {
     Write-Host "ERROR Applying permissions at root. Exiting" -ForegroundColor RED
     Write-Host "$($error[0].exception.message)" -ForegroundColor RED
@@ -354,7 +355,7 @@ try {
 }
 
 #Disconnect from the vCenter Server
-Write-Host "COMPLETE! Disconnecting from vCenter at $vCenter"`n -ForeGroundColor Cyan
-Disconnect-VIServer $vCenter -Confirm:$false
+Write-Host "COMPLETE! Disconnecting from vCenter at $vCenter" -ForeGroundColor Cyan
+$null = Disconnect-VIServer $vCenter -Confirm:$false
 Write-Host
 write-host $LineSepDashes

@@ -211,7 +211,8 @@ if ($vCenterType -notin @("OnPrem", "VMC", "AVS", "GVCE")) {
       3 {  $vCenterType = "GVCE"    }
   }
 }
-Write-Host "vCenter Type set to $vCenterType"  -ForegroundColor CYAN
+Write-Host "vCenter Type set to " -ForegroundColor Cyan -NoNewline
+Write-Host "$($vCenterType.ToUpper())"  -ForegroundColor GREEN
 Write-Host
 
 #EndRegion vCenter Type

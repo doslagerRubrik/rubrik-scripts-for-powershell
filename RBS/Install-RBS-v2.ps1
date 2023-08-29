@@ -150,16 +150,16 @@ $OutFile = "$Path\RubrikBackupService.zip"
 Write-Host "Downloading RBS zip file from $url" -ForegroundColor CYAN
 write-Host "Saving as $OutFile" -ForegroundColor CYAN
 
-
+#Set progress to none - Invoke-Webrequest is annoying and lingers over the CLI after it is complete
 $oldProgressPreference = $progressPreference; 
 $progressPreference = 'SilentlyContinue'
-
 try {
     $null = Invoke-WebRequest -Uri $url -OutFile $OutFile -SkipCertificateCheck
 } catch {
     Write-Host "ERROR! Could not download RBS zip file from $RubrikCluster. Please verify connectivity" -ForegroundColor Red
     exit 1
 }
+#Set ProgressPref back to what it was before we did IWR
 $progressPreference = $oldProgressPreference 
 Write-Host "Expanding RBS locally to c:\Temp\RubrikBackupService\" -ForegroundColor CYAN
 Expand-Archive -LiteralPath "c:\Temp\RubrikBackupService.zip" -DestinationPath "C:\Temp\RubrikBackupService" -Force

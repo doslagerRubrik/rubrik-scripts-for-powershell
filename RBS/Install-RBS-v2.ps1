@@ -258,12 +258,12 @@ foreach($Computer in $ValidComputerList){
 
 
     #Region Restarting Service on remote computer
-    sleep 5
+    Start-Sleep 5
     Write-Host "Restarting RBS service on $computer" -ForegroundColor Cyan
     try {
         Invoke-Command -ComputerName $Computer -ScriptBlock { 
             get-service "rubrik backup service" | Stop-Service 
-            sleep 2
+            Start-Sleep 2
             get-service "rubrik backup service" | Start-Service
         }
     } catch {

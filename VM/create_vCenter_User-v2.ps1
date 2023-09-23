@@ -58,7 +58,10 @@ param (
   [string]$RubrikServiceAccount,
 
   # Role name to create. Default: Rubrik_Backup_Service
-  [string]$RubrikRoleName = 'Rubrik_Backup_Service',
+  [string]$RubrikRoleName,
+ 
+  # Create Rubrik vCenter Role only and exit. Default: false
+  [switch]$CreateRoleOnly,
 
   #Select the type of vCenter to add privileges for. No Default
   [string]$vCenterType,
@@ -218,6 +221,8 @@ Write-Host
 #EndRegion vCenter Type
 
 
+
+
 #Region Connect to vCenter
 if ($Global:DefaultVIServers) {
     Write-Host "WARNING: Already connected to $($Global:DefaultVIServers -join ",")! Continue? Existing connections will be terminated"  -ForegroundColor YELLOW
@@ -299,15 +304,61 @@ try {
 #EndRegion Connect to vCenter
 
 
+
+#Region Role Name
+if (! $RubrikRoleName){
+    Write-Host "Name of vCenter Role name not specified on CLI. Please enter Role Name: " -foregroundcolor Yellow
+    $RubrikRoleName = read-host "Rubrik vCenter Role Name [ Rubrik_Backup_Service ] "
+    if ( [string]::IsNullOrEmpty($RubrikRoleName)  ) {
+        $RubrikRoleName  = "Rubrik_Backup_Service"
+    }
+} else {
+    Write-Host "Rubrik Role Name specified on Command Line"
+}
+Write-Host "Rubrik Role Name will be: " -nonewline 
+Write-Host "$RubrikRoleName" -ForegroundColor GREEN
+#EndRegion Role Name
+
+
 # Rubrik Service Account User
 # The Rubrik User account is a non-login, least-privileged, vCenter Server account that you specify during deployment.
-if (! $RubrikServiceAccount) {
-    Write-Host "Rubrik Service Account not specified. Please enter account name in full format:" -ForegroundColor yellow
-    Write-Host "  > Examples:  " -ForegroundColor yellow -NoNewline
-    Write-Host "MYDOMAIN\RubrikSvcAcct  - AD account using NetBIOS name"  -ForegroundColor CYAN
-    Write-Host "               RubrikSvc@vsphere.local - VMware local SSO account" -ForegroundColor CYAN
-    $RubrikServiceAccount = Read-Host "Rubrik Service Account "
+if (! $CreateRoleOnly ) {
+    $RubrikServiceAccountRegEx = "@"
+    if (! $RubrikServiceAccount) {
+        Write-Host "Rubrik Service Account not specified. Please enter account name in full format:" -ForegroundColor yellow
+        Write-Host "  > Examples:  " -ForegroundColor yellow -NoNewline
+        Write-Host "MYDOMAIN\RubrikSvcAcct      - AD account using NetBIOS name"  -ForegroundColor CYAN
+        Write-Host "               vsphere.local\RubrikSvcAcct - VMware local SSO account" -ForegroundColor CYAN
+        Write-Host "               NOTE: user must be in DOMAIN\user format" -ForegroundColor CYAN
+        $RubrikServiceAccount = Read-Host "Rubrik Service Account "
+    }
+    if ($RubrikServiceAccount -match $RubrikServiceAccountRegEx) {
+        Write-Host "ERROR! you specified the user in an incorrect format. Must be DOMAIN\user Please try again." -ForegroundColor Red
+        $null = Disconnect-VIServer $vCenter -Confirm:$false
+        EXIT
+    }
+    # Verify user exists. If does not exist, prompt to create role only or exit
+    if (! $(Get-VIAccount -name $RubrikServiceAccount)) {
+        Write-Host "ERROR! User specified ($RubrikServiceAccount) does not exist. Continue with creating role only?" -ForegroundColor RED
+        $message = "Press X to exit immediately, or C to continue and create vCenter Role only: "
+        $PromptExit = New-Object System.Management.Automation.Host.ChoiceDescription "e&Xit", "Exit"
+        $PromptCont = New-Object System.Management.Automation.Host.ChoiceDescription "&Continue", "Continue"
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]($PromptExit, $PromptCont)
+        $result = $host.ui.PromptForChoice($title, $message, $options, -1) # -1 means no default choice so user HAS to hit C to continue; errant ENTER strokes will not automatically continue
+        switch ($result) {
+            0 {
+                Write-Host "Exiting" -ForegroundColor Red
+                $null = Disconnect-VIServer $vCenter -Confirm:$false
+                exit 
+            }
+            1 {
+                Write-Host "Continuing with vCenter Role only" -foregroundcolor Green
+                $CreateRoleOnly = $true
+            } #No default needed--results from PromptForChoice can only be 0 or 1 in this case; Anything other then X or C will reprompt
+        }
+    }
 }
+
 
 
 #Set privleges based on vCenter Type
@@ -338,6 +389,14 @@ try {
     Write-Host "$($error[0].exception.message)" -ForegroundColor RED
     Write-Host
     write-host $LineSepDashes
+    $null = Disconnect-VIServer $vCenter -Confirm:$false
+    exit
+}
+
+#Exit if CreateRoleOnly specified
+If ($CreateRoleOnly) {
+    Write-Host "CreateRoleOnly specified on command line. Exiting." -ForegroundColor Yellow
+    $null = Disconnect-VIServer $vCenter -Confirm:$false
     exit
 }
 
@@ -352,6 +411,7 @@ try {
     Write-Host "$($error[0].exception.message)" -ForegroundColor RED
     Write-Host
     write-host $LineSepDashes
+    $null = Disconnect-VIServer $vCenter -Confirm:$false
     Exit
 }
 

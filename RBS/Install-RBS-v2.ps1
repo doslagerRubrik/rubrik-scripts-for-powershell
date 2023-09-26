@@ -84,6 +84,11 @@ param(
     #Local Location to store download of RBS
     [string]$Path = "c:\temp"
 )
+
+if (-not $IsWindows) {
+    Write-Host "ERROR! must be run from Windows!" -ForegroundColor Red
+    exit
+}
 $dateformat    = 'yyyy-MM-ddTHH:mm:ss'     #ISO8601 time standard
 $LineSepDashes = "-" * 150
 

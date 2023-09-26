@@ -74,6 +74,9 @@ param(
     #Optionally, can use username and password (clear text!) via command line. NOT RECOMMENDED
     [string]$RBSPassword,
 
+    #Skip RBS install, change RBS user/pw only
+    [switch]$ChangeRBSPasswordOnly,
+
     #Local Location to store download of RBS
     [string]$Path = "c:\temp"
 )
@@ -85,12 +88,14 @@ Write-Host "Starting Install-RBS-v2.ps1 - $(Get-Date -format $dateformat)" -Fore
 write-host $LineSepDashes
 
 #Region RubrikCluster
-If ($RubrikCluster) {
-    Write-Host "Rubrik Cluster specified: $RubrikCluster" -ForegroundColor GREEN
-} else {
-    Write-Host "ERROR! Rubrik cluster not specified on command line for RBS Download" -ForegroundColor RED
-    $RubrikCluster = Read-Host -Prompt "Please enter Rubrik Cluster Name"
-    write-host
+if (-not $ChangeRBSPasswordOnly) {
+    If ($RubrikCluster) {
+        Write-Host "Rubrik Cluster specified: $RubrikCluster" -ForegroundColor GREEN
+    } else {
+        Write-Host "ERROR! Rubrik cluster not specified on command line for RBS Download" -ForegroundColor RED
+        $RubrikCluster = Read-Host -Prompt "Please enter Rubrik Cluster Name"
+        write-host
+    }
 }
 #EndRegion RubrikCluster
 
@@ -99,7 +104,11 @@ If ($RubrikCluster) {
 if ($ComputerName) {
     Write-Host "Target computers: $($computername -join ',')" -ForegroundColor GREEN
 } else {
-    Write-Host "ERROR! List of target computers to install RBS not provided on command line" -ForegroundColor RED
+    if ($ChangeRBSPasswordOnly) {
+        Write-Host "ERROR! List of target computers to change RBS user/pw not provided on command line" -ForegroundColor RED
+    } else {
+        Write-Host "ERROR! List of target computers to install RBS not provided on command line" -ForegroundColor RED
+    }
     $ComputerName = Read-HOst -Prompt "Please enter list of computers, comma separated" 
     write-host
 }
@@ -135,37 +144,39 @@ if ( $RBSCredential -and ($RBSCredential.GetType().Name -eq "PSCredential") ){
 Write-Verbose "RBS Username:  $($RubrikServiceAccount.UserName)"
 Write-Verbose "RBS Password:  $($RubrikServiceAccount.GetNetworkCredential().Password)"
 #EndRegion User/Pw/Creds
+write-host $LineSepDashes
 
 
 #region Download the Rubrik Connector 
 #forcing PS6+ with the Requires at the top of the script. 
 #Do not want to use PS 5.x and dealing with SSL self signed certs
 #additional steps to invoke-command better run on PS7
-if (-not (test-path  $Path) ) {
-    $null = New-Item -Path $Path -ItemType Directory 
-}
-$url =  "https://$($RubrikCluster)/connector/RubrikBackupService.zip"
-$OutFile = "$Path\RubrikBackupService.zip"
+if (-not $ChangeRBSPasswordOnly) {
+    if (-not (test-path  $Path) ) {
+        $null = New-Item -Path $Path -ItemType Directory 
+    }
+    $url =  "https://$($RubrikCluster)/connector/RubrikBackupService.zip"
+    $OutFile = "$Path\RubrikBackupService.zip"
 
-Write-Host "Downloading RBS zip file from $url" -ForegroundColor CYAN
-write-Host "Saving as $OutFile" -ForegroundColor CYAN
+    Write-Host "Downloading RBS zip file from $url" -ForegroundColor CYAN
+    write-Host "Saving as $OutFile" -ForegroundColor CYAN
 
-#Set progress to none - Invoke-Webrequest is annoying and lingers over the CLI after it is complete
-$oldProgressPreference = $progressPreference; 
-$progressPreference = 'SilentlyContinue'
-try {
-    $null = Invoke-WebRequest -Uri $url -OutFile $OutFile -SkipCertificateCheck
-} catch {
-    Write-Host "ERROR! Could not download RBS zip file from $RubrikCluster. Please verify connectivity" -ForegroundColor Red
-    exit 1
+    #Set progress to none - Invoke-Webrequest is annoying and lingers over the CLI after it is complete
+    $oldProgressPreference = $progressPreference; 
+    $progressPreference = 'SilentlyContinue'
+    try {
+        $null = Invoke-WebRequest -Uri $url -OutFile $OutFile -SkipCertificateCheck
+    } catch {
+        Write-Host "ERROR! Could not download RBS zip file from $RubrikCluster. Please verify connectivity" -ForegroundColor Red
+        exit 1
+    }
+    #Set ProgressPref back to what it was before we did IWR
+    $progressPreference = $oldProgressPreference 
+    Write-Host "Expanding RBS locally to c:\Temp\RubrikBackupService\" -ForegroundColor CYAN
+    Expand-Archive -LiteralPath "c:\Temp\RubrikBackupService.zip" -DestinationPath "C:\Temp\RubrikBackupService" -Force
+    write-host $LineSepDashes
 }
-#Set ProgressPref back to what it was before we did IWR
-$progressPreference = $oldProgressPreference 
-Write-Host "Expanding RBS locally to c:\Temp\RubrikBackupService\" -ForegroundColor CYAN
-Expand-Archive -LiteralPath "c:\Temp\RubrikBackupService.zip" -DestinationPath "C:\Temp\RubrikBackupService" -Force
-write-host $LineSepDashes
 #endregion
-
 
 #Region Validate the Servername(s) and if it is online
 write-Host "Testing connectivity to each target server. Please wait." -ForegroundColor CYAN
@@ -184,66 +195,71 @@ write-host $LineSepDashes
 
 #Region Loop Through Computer List
 foreach($Computer in $ValidComputerList){
-    Write-Host "Starting Install of RBS on " -ForegroundColor CYAN -NoNewline 
+    if ($ChangeRBSPasswordOnly){
+        Write-Host "Changing RBS Password on " -ForegroundColor CYAN -NoNewline 
+    } else {
+        Write-Host "Starting Install of RBS on " -ForegroundColor CYAN -NoNewline 
+    }
     Write-Host "$Computer" -ForegroundColor GREEN -NoNewline
     Write-Host ". Please wait" -ForegroundColor CYAN
 
-
-
-    #region Copy the RubrikBackupService files to the remote computer
-    Write-Host "Copying RBS files to $Computer. Please wait" -ForegroundColor CYAN
-    try {
-        Invoke-Command -ComputerName $Computer -ScriptBlock { 
-            New-Item -Path "C:\Temp\RubrikBackupService" -type directory -Force | out-null
+    #region Copy RBS files, Install RBS, Delete RBS Files
+    if (-not $ChangeRBSPasswordOnly) {
+        #region Copy the RubrikBackupService files to the remote computer
+        Write-Host "Copying RBS files to $Computer. Please wait" -ForegroundColor CYAN
+        try {
+            Invoke-Command -ComputerName $Computer -ScriptBlock { 
+                New-Item -Path "C:\Temp\RubrikBackupService" -type directory -Force | out-null
+            }
+            $Session = New-PSSession -ComputerName $Computer 
+            foreach ($file in Get-ChildItem C:\Temp\RubrikBackupService) {
+                write-host "  > Copying $file to $computer" -ForegroundColor CYAN
+                Copy-Item -ToSession $Session $file -Destination C:\Temp\RubrikBackupService | out-Null
+            }
+            Remove-PSSession -Session $Session
+        } catch {
+            Write-Host "ERROR! There was an error copying the RBS to $Computer. Skipping install on this computer. Please try manually" -ForegroundColor RED
+            #Write-Host "$($error[0].exception.message)" -ForegroundColor RED
+            write-host $LineSepDashes
+            continue
         }
+        #endregion
+
+
+
+        #region Install the RBS on the Remote Computer
+        Write-Host "Installing RBS on $Computer. Please wait" -ForegroundColor CYAN
         $Session = New-PSSession -ComputerName $Computer 
-        foreach ($file in Get-ChildItem C:\Temp\RubrikBackupService) {
-            write-host "  > Copying $file to $computer" -ForegroundColor CYAN
-            Copy-Item -ToSession $Session $file -Destination C:\Temp\RubrikBackupService | out-Null
+        try {
+            Invoke-Command -Session $Session -ScriptBlock {
+                Start-Process -FilePath "C:\Temp\RubrikBackupService\RubrikBackupService.msi" -ArgumentList "/quiet" -Wait
+            }        
+        } catch {
+            Write-Host "ERROR! There was an error installing RBS to $Computer. Please try manually" -ForegroundColor RED
+            #Write-Host "$($error[0].exception.message)" -ForegroundColor RED
+            write-host $LineSepDashes
+            continue    
         }
         Remove-PSSession -Session $Session
-    } catch {
-        Write-Host "ERROR! There was an error copying the RBS to $Computer. Skipping install on this computer. Please try manually" -ForegroundColor RED
-        #Write-Host "$($error[0].exception.message)" -ForegroundColor RED
-        write-host $LineSepDashes
-        continue
-    }
-    #endregion
+        #endregion
 
 
 
-    #region Install the RBS on the Remote Computer
-    Write-Host "Installing RBS on $Computer. Please wait" -ForegroundColor CYAN
-    $Session = New-PSSession -ComputerName $Computer 
-    try {
-        Invoke-Command -Session $Session -ScriptBlock {
-            Start-Process -FilePath "C:\Temp\RubrikBackupService\RubrikBackupService.msi" -ArgumentList "/quiet" -Wait
-        }        
-    } catch {
-        Write-Host "ERROR! There was an error installing RBS to $Computer. Please try manually" -ForegroundColor RED
-        #Write-Host "$($error[0].exception.message)" -ForegroundColor RED
-        write-host $LineSepDashes
-        continue    
-    }
-    Remove-PSSession -Session $Session
-    #endregion
-
-
-
-    #Region remove RBS files
-    Write-Host "Deleting RBS files on $Computer. Please wait" -ForegroundColor CYAN
-    try {
-        Invoke-Command -ComputerName $Computer -ScriptBlock { 
-            Remove-Item -Path "C:\Temp\RubrikBackupService" -recurse -Force | out-null
+        #Region remove RBS files
+        Write-Host "Deleting RBS files on $Computer. Please wait" -ForegroundColor CYAN
+        try {
+            Invoke-Command -ComputerName $Computer -ScriptBlock { 
+                Remove-Item -Path "C:\Temp\RubrikBackupService" -recurse -Force | out-null
+            }
+        } catch {
+            Write-Host "ERROR! There was an error removing RBS installer files. Please try manually" -ForegroundColor RED
+            #Write-Host "$($error[0].exception.message)" -ForegroundColor RED
+            write-host $LineSepDashes
+            continue
         }
-    } catch {
-        Write-Host "ERROR! There was an error removing RBS installer files. Please try manually" -ForegroundColor RED
-        #Write-Host "$($error[0].exception.message)" -ForegroundColor RED
-        write-host $LineSepDashes
-        continue
+        #EndRegion Remove RBS Files
     }
-    #EndRegion Remove RBS Files
-
+    #ENDregion Copy RBS files, Install RBS, Delete RBS Files
 
 
     #Region Setting Service Username/Password

@@ -9,6 +9,7 @@
     - Deletes RBS files on remote computers
     - Sets service to run as specified user account and restarts service. 
     NOTE: REQUIRES PS6 or greater due to Remote PSSessions
+    OPTIONAL: Run with ChangeRBSPasswordOnly switch at CLI to change user/pw on existing RBS installs only (no install)
 
 .PARAMETER RubrikCluster
     Name or IP of Rubrik Cluster to download the RBS from
@@ -22,8 +23,11 @@
 .PARAMETER RBSUserName
     Username of service account to use on remote computer for RBS Service
 
-.PARAMETER RBSUserName
+.PARAMETER RBSPassword
     Password of service account to use on remote computer for RBS Service (WARNING: Cleartext on commandline and in PS History--use carefully)
+
+.PARAMETER ChangeRBSPasswordOnly
+    CLI switch to signal to only change user/pw on server. Does not download/copy/install RBS. 
 
 .PARAMETER Path
     Location to download and extract RBS to. Default C:\Temp

@@ -141,7 +141,7 @@ if ( $RBSCredential -and ($RBSCredential.GetType().Name -eq "PSCredential") ){
 } elseif ( $RBSUserName ) {
     #UserName only supplied on CLI, prompt for password
     Write-Host "Enter password for the service account ($RBSUserName) that will run the Rubrik Backup Service" -ForegroundColor Cyan
-    $RBSCredential = Get-Credential  -title "Rubrik Service Account"-UserName $RBSUserName 
+    $RBSCredential = Get-Credential  -title "Rubrik Service Account"-UserName $RBSUserName -Message "Enter Service Account password or blank/enter for Group Managed Svc Acct (gMSA)"
 } else {
     #Nothing supplied - prompt for user/pw
     Write-Host "User/Password not specified on CLI...prompting for credential" -ForegroundColor Cyan

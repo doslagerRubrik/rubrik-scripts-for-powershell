@@ -4,6 +4,7 @@
 
 .DESCRIPTION
     Install Rubrik Backup Service from a specific cluster to a list of Windows Computers. 
+    Run with any combination of command line arguments. Script will prompt for anything not on CLI. 
     - Downloads RBS from specified cluster and extracts file. 
     - Copies to each server and remotely installs RBS (in order of input, one at a time) 
     - Deletes RBS files on remote computers
@@ -25,6 +26,7 @@
 
 .PARAMETER RBSPassword
     Password of service account to use on remote computer for RBS Service (WARNING: Cleartext on commandline and in PS History--use carefully)
+    When using Group Service Managed Accounts (gMSA), omit this CLI argument and it will prompt for pw. Press enter to leave password empty. 
 
 .PARAMETER ChangeRBSCredentialOnly
     CLI switch to signal to only change user/pw on server. Does not download/copy/install RBS. 

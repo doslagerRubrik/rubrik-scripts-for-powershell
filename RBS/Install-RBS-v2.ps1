@@ -9,7 +9,7 @@
     - Deletes RBS files on remote computers
     - Sets service to run as specified user account and restarts service. 
     NOTE: REQUIRES PS6 or greater due to Remote PSSessions
-    OPTIONAL: Run with ChangeRBSPasswordOnly switch at CLI to change user/pw on existing RBS installs only (no install)
+    OPTIONAL: Run with ChangeRBSCredentialOnly switch at CLI to change user/pw on existing RBS installs only (no install)
 
 .PARAMETER RubrikCluster
     Name or IP of Rubrik Cluster to download the RBS from
@@ -26,7 +26,7 @@
 .PARAMETER RBSPassword
     Password of service account to use on remote computer for RBS Service (WARNING: Cleartext on commandline and in PS History--use carefully)
 
-.PARAMETER ChangeRBSPasswordOnly
+.PARAMETER ChangeRBSCredentialOnly
     CLI switch to signal to only change user/pw on server. Does not download/copy/install RBS. 
 
 .PARAMETER Path
@@ -79,7 +79,7 @@ param(
     [string]$RBSPassword,
 
     #Skip RBS install, change RBS user/pw only
-    [switch]$ChangeRBSPasswordOnly,
+    [switch]$ChangeRBSCredentialOnly,
 
     #Local Location to store download of RBS
     [string]$Path = "c:\temp"
@@ -97,7 +97,7 @@ Write-Host "Starting Install-RBS-v2.ps1 - $(Get-Date -format $dateformat)" -Fore
 write-host $LineSepDashes
 
 #Region RubrikCluster
-if (-not $ChangeRBSPasswordOnly) {
+if (-not $ChangeRBSCredentialOnly) {
     If ($RubrikCluster) {
         Write-Host "Rubrik Cluster specified: $RubrikCluster" -ForegroundColor GREEN
     } else {
@@ -113,7 +113,7 @@ if (-not $ChangeRBSPasswordOnly) {
 if ($ComputerName) {
     Write-Host "Target computers: $($computername -join ',')" -ForegroundColor GREEN
 } else {
-    if ($ChangeRBSPasswordOnly) {
+    if ($ChangeRBSCredentialOnly) {
         Write-Host "ERROR! List of target computers to change RBS user/pw not provided on command line" -ForegroundColor RED
     } else {
         Write-Host "ERROR! List of target computers to install RBS not provided on command line" -ForegroundColor RED
@@ -128,30 +128,31 @@ if ($ComputerName) {
 if ( $RBSCredential -and ($RBSCredential.GetType().Name -eq "PSCredential") ){
     #Credential supplied via command line and var type is a PSCredential
     Write-Host "Credential specified." -ForegroundColor CYAN
-    $RubrikServiceAccount = $RBSCredential
 } elseif ( $RBSCredential ) {
     #Variable is defined, but not a proper PScredential - Ignore and re-prompt
     Write-Host "Credential entered on CLI, but not a proper PScredential. Prompting for credential" -ForegroundColor CYAN
     Write-Host "Enter user name and password for the service account that will run the Rubrik Backup Service" -ForegroundColor Cyan
-    $RubrikServiceAccount = Get-Credential
+    $RBSCredential = Get-Credential -title "Rubrik Service Account"
 } elseif ( $RBSUserName -and $RBSPassword ){
     Write-Host "Username and password specified via CLI, creating Credential" -ForegroundColor Cyan
     # Convert Cleartext from CLI to SecureString
     [securestring]$secStringPassword = ConvertTo-SecureString $RBSPassword -AsPlainText -Force
-    [pscredential]$RubrikServiceAccount = New-Object System.Management.Automation.PSCredential ($RBSUserName, $secStringPassword)
+    [pscredential]$RBSCredential     = New-Object System.Management.Automation.PSCredential ($RBSUserName, $secStringPassword)
 } elseif ( $RBSUserName ) {
     #UserName only supplied on CLI, prompt for password
     Write-Host "Enter password for the service account ($RBSUserName) that will run the Rubrik Backup Service" -ForegroundColor Cyan
-    $RubrikServiceAccount = Get-Credential -UserName $RBSUserName 
-    #$RubrikServiceAccount = Get-Credential -UserName $RBSUserName -Title "Enter user name and password for the service account that will run the Rubrik Backup Service"
+    $RBSCredential = Get-Credential  -title "Rubrik Service Account"-UserName $RBSUserName 
 } else {
     #Nothing supplied - prompt for user/pw
-    Write-Host "Nothing specified on CLI...prompting for credential" -ForegroundColor Cyan
+    Write-Host "User/Password not specified on CLI...prompting for credential" -ForegroundColor Cyan
     Write-Host "Enter user name and password for the service account that will run the Rubrik Backup Service" -ForegroundColor Cyan
-    $RubrikServiceAccount = Get-Credential
+    $RBSCredential = Get-Credential -title "Rubrik Service Account"
 }
-Write-Verbose "RBS Username:  $($RubrikServiceAccount.UserName)"
-Write-Verbose "RBS Password:  $($RubrikServiceAccount.GetNetworkCredential().Password)"
+
+$RBSUsername = $($RBSCredential.UserName)
+$RBSPassword = $($RBSCredential.GetNetworkCredential().Password)
+Write-Verbose "RBS Username:  $RBSUsername"
+Write-Verbose "RBS Password:  $RBSPassword"
 #EndRegion User/Pw/Creds
 write-host $LineSepDashes
 
@@ -160,7 +161,7 @@ write-host $LineSepDashes
 #forcing PS6+ with the Requires at the top of the script. 
 #Do not want to use PS 5.x and dealing with SSL self signed certs
 #additional steps to invoke-command better run on PS7
-if (-not $ChangeRBSPasswordOnly) {
+if (-not $ChangeRBSCredentialOnly) {
     if (-not (test-path  $Path) ) {
         $null = New-Item -Path $Path -ItemType Directory 
     }
@@ -202,18 +203,20 @@ write-host $LineSepDashes
 #EndRegion Validate the Servername(s) and if it is online
 
 
+
+##############################################################################################################
 #Region Loop Through Computer List
 foreach($Computer in $ValidComputerList){
-    if ($ChangeRBSPasswordOnly){
+    if ($ChangeRBSCredentialOnly){
         Write-Host "Changing RBS Password on " -ForegroundColor CYAN -NoNewline 
     } else {
         Write-Host "Starting Install of RBS on " -ForegroundColor CYAN -NoNewline 
     }
     Write-Host "$Computer" -ForegroundColor GREEN -NoNewline
-    Write-Host ". Please wait" -ForegroundColor CYAN
+    Write-Host ". Please wait - $(Get-Date -format $dateformat)" -ForegroundColor CYAN
 
     #region Copy RBS files, Install RBS, Delete RBS Files
-    if (-not $ChangeRBSPasswordOnly) {
+    if (-not $ChangeRBSCredentialOnly) {
         #region Copy the RubrikBackupService files to the remote computer
         Write-Host "Copying RBS files to $Computer. Please wait" -ForegroundColor CYAN
         try {
@@ -222,7 +225,7 @@ foreach($Computer in $ValidComputerList){
             }
             $Session = New-PSSession -ComputerName $Computer 
             foreach ($file in Get-ChildItem C:\Temp\RubrikBackupService) {
-                write-host "  > Copying $file to $computer" -ForegroundColor CYAN
+                write-host "  > Copying $file to $computer"
                 Copy-Item -ToSession $Session $file -Destination C:\Temp\RubrikBackupService | out-Null
             }
             Remove-PSSession -Session $Session
@@ -271,16 +274,88 @@ foreach($Computer in $ValidComputerList){
     #ENDregion Copy RBS files, Install RBS, Delete RBS Files
 
 
+
+    #Region adding username to administrators on remote computer
+    Start-Sleep 5
+    Write-Host "Adding $RBSUserName to administrators on $computer" -ForegroundColor Cyan
+    try {
+        Invoke-Command -ComputerName $Computer -ScriptBlock { 
+            param ($user)
+            if ( $(Get-LocalGroupMember administrators).name -contains $user) {
+                Write-Host "User $user is already a member of the Administrators Group. Nothing to do" -ForegroundColor GREEN
+            } else {
+                Add-LocalGroupMember -Group "Administrators" -Member $user
+            }
+        } -ArgumentList $RBSUserName
+    } catch {
+        Write-Host "ERROR! Could not add $RBSUserName to $Computer\Administrators. Please check manually" -ForegroundColor RED
+        continue
+    }
+    #EndRegion Restarting Service on remote computer
+    
+
+
+    #Region Setting SeServiceLoginRight on remote computer to allow run as a service
+    #From: https://stackoverflow.com/questions/313831/using-powershell-how-do-i-grant-log-on-as-service-to-an-account
+    Write-Host "Granting ""Log on as a Service"" to $RBSUserName on $computer" -ForegroundColor Cyan
+    try {
+        Invoke-Command -ComputerName $computer -Script {
+            param(
+                [string] $username,
+                [string] $computerName
+            )
+            $tempPath = [System.IO.Path]::GetTempPath()
+            $import = Join-Path -Path $tempPath -ChildPath "import.inf"
+            if(Test-Path $import) { Remove-Item -Path $import -Force }
+            $export = Join-Path -Path $tempPath -ChildPath "export.inf"
+            if(Test-Path $export) { Remove-Item -Path $export -Force }
+            $secedt = Join-Path -Path $tempPath -ChildPath "secedt.sdb"
+            if(Test-Path $secedt) { Remove-Item -Path $secedt -Force }
+            try {
+                #Write-Host ("  > Granting SeServiceLogonRight to user account: {0} on host: {1}." -f $username, $computerName)
+                $sid = ((New-Object System.Security.Principal.NTAccount($username)).Translate([System.Security.Principal.SecurityIdentifier])).Value
+                Write-Host "  > Exporting Local Policy to temp file"
+                secedit /export /cfg $export | out-null
+                $sids = (Select-String $export -Pattern "SeServiceLogonRight").Line
+                if ($sids -match $sid) {
+                    Write-Host "  > User currently granted SeServiceLoginRight - Nothing to do!" -ForegroundColor GREEN
+                } else {
+                    foreach ($line in @("[Unicode]", "Unicode=yes", "[System Access]", "[Event Audit]", "[Registry Values]", "[Version]", "signature=`"`$CHICAGO$`"", "Revision=1", "[Profile Description]", "Description=GrantLogOnAsAService security template", "[Privilege Rights]", "$sids,*$sid")){
+                        Add-Content $import $line
+                    }
+                    Write-Host "  > Importing Local Policy with updated SeServiceLoginRight"
+                    secedit /import /db $secedt /cfg $import | out-null
+                    Write-Host "  > Applying modified Local Policy"
+                    secedit /configure /db $secedt | out-null
+                    Write-Host "  > Refreshing Group Policy to apply updates to Local Policy"
+                    gpupdate /force | out-null                    
+                }
+                Remove-Item -Path $import -Force | out-null
+                Remove-Item -Path $export -Force | out-null
+                Remove-Item -Path $secedt -Force | out-null
+            } catch {
+                Write-Host ("Failed to grant SeServiceLogonRight to user account: {0} on host: {1}." -f $username, $computerName) -ForegroundColor RED
+                $error[0]
+            }
+        } -ArgumentList ($RBSUserName, $computer)        
+    } catch {
+        Write-Host "ERROR! Could not add $RBSUserName to $Computer ""Log on as a Service"". Please check manually" -ForegroundColor RED
+        continue
+    }
+
+
+    
     #Region Setting Service Username/Password
-    Write-Host "Setting service run as $RBSusername on $Computer" -ForegroundColor CYAN
+    Write-Host "Setting service to run as $RBSusername on $Computer" -ForegroundColor CYAN
     try {
         Get-CimInstance Win32_Service -computer $Computer -Filter "Name='Rubrik Backup Service'" | Invoke-CimMethod -MethodName Change -Arguments @{ StartName = $RBSUsername; StartPassword = $RBSPassword } | out-null
     } catch {
-        Write-Host "ERROR! Did not set the username properly on $Computer. Please check manually"
+        Write-Host "ERROR! Did not set the username $RBSUserName properly on $Computer. Please check manually"
+        continue
     }
     #EndRegion Setting Service Username/Password
 
-
+    
 
     #Region Restarting Service on remote computer
     Start-Sleep 5
@@ -293,10 +368,18 @@ foreach($Computer in $ValidComputerList){
         }
     } catch {
         Write-Host "ERROR! Could not restart service properly on $Computer. Please check manually"
+        continue
     }
     #EndRegion Restarting Service on remote computer
 
 
+    
+    if ($ChangeRBSCredentialOnly) {
+        Write-Host "Changing RBS Credentials " -NoNewline -ForegroundColor CYAN
+    } else {
+        Write-Host "Install of RBS " -NoNewline -ForegroundColor CYAN
+    }
+    Write-Host "on $computer complete - $(Get-Date -format $dateformat)" -ForegroundColor GREEN
     write-host $LineSepDashes
 
 } 

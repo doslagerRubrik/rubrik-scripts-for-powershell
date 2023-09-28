@@ -183,7 +183,7 @@ if (-not $ChangeRBSCredentialOnly) {
     #Set ProgressPref back to what it was before we did IWR
     $progressPreference = $oldProgressPreference 
     Write-Host "Expanding RBS locally to c:\Temp\RubrikBackupService\" -ForegroundColor CYAN
-    Expand-Archive -LiteralPath "c:\Temp\RubrikBackupService.zip" -DestinationPath "C:\Temp\RubrikBackupService" -Force
+    Expand-Archive -LiteralPath $OutFile -DestinationPath "$path\RubrikBackupService" -Force
     write-host $LineSepDashes
 }
 #endregion
@@ -282,7 +282,7 @@ foreach($Computer in $ValidComputerList){
         Invoke-Command -ComputerName $Computer -ScriptBlock { 
             param ($user)
             if ( $(Get-LocalGroupMember administrators).name -contains $user) {
-                Write-Host "User $user is already a member of the Administrators Group. Nothing to do" -ForegroundColor GREEN
+                Write-Host "  > User $user is already a member of the Administrators Group. Nothing to do" -ForegroundColor GREEN
             } else {
                 Add-LocalGroupMember -Group "Administrators" -Member $user
             }
@@ -320,7 +320,18 @@ foreach($Computer in $ValidComputerList){
                 if ($sids -match $sid) {
                     Write-Host "  > User currently granted SeServiceLoginRight - Nothing to do!" -ForegroundColor GREEN
                 } else {
-                    foreach ($line in @("[Unicode]", "Unicode=yes", "[System Access]", "[Event Audit]", "[Registry Values]", "[Version]", "signature=`"`$CHICAGO$`"", "Revision=1", "[Profile Description]", "Description=GrantLogOnAsAService security template", "[Privilege Rights]", "$sids,*$sid")){
+                    foreach ($line in @("[Unicode]", 
+                                        "Unicode=yes", 
+                                        "[System Access]", 
+                                        "[Event Audit]", 
+                                        "[Registry Values]", 
+                                        "[Version]", 
+                                        "signature=`"`$CHICAGO$`"", 
+                                        "Revision=1", 
+                                        "[Profile Description]", 
+                                        "Description=GrantLogOnAsAService security template", 
+                                        "[Privilege Rights]", 
+                                        "$sids,*$sid")){
                         Add-Content $import $line
                     }
                     Write-Host "  > Importing Local Policy with updated SeServiceLoginRight"
@@ -329,10 +340,10 @@ foreach($Computer in $ValidComputerList){
                     secedit /configure /db $secedt | out-null
                     Write-Host "  > Refreshing Group Policy to apply updates to Local Policy"
                     gpupdate /force | out-null                    
+                    Remove-Item -Path $import -Force | out-null
+                    Remove-Item -Path $secedt -Force | out-null
                 }
-                Remove-Item -Path $import -Force | out-null
                 Remove-Item -Path $export -Force | out-null
-                Remove-Item -Path $secedt -Force | out-null
             } catch {
                 Write-Host ("Failed to grant SeServiceLogonRight to user account: {0} on host: {1}." -f $username, $computerName) -ForegroundColor RED
                 $error[0]
@@ -384,5 +395,9 @@ foreach($Computer in $ValidComputerList){
 
 } 
 #EndRegion Loop Through Computer List
+
+#Cleanup RBS downloads from $path folder (ie C:\Temp)
+Remove-Item -Path $OutFile -Force | out-null
+Remove-Item -Path "$path\RubrikBackupService" -Force -recurse | out-null
 
 Write-Host "Script complete - $(Get-Date -format $dateformat)" -ForegroundColor Green

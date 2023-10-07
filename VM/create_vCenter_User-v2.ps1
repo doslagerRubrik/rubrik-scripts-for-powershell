@@ -204,17 +204,21 @@ if ((Test-Connection -ComputerName $vcenter -Quiet) -eq $false) {
 
 #Region vCenter Type
 if ($vCenterType -notin @("OnPrem", "VMC", "AVS", "GVCE")) {
-  Write-Host "ERROR! vCenter type specified is blank or incorrect" -ForegroundColor RED
-  $title      = "Choose which type of vCenter - OnPrem, VMware Cloud, Amazon, Google Cloud"
-  $message    = ""
-  $Options    = [System.Management.Automation.Host.ChoiceDescription[]] @("&OnPrem", "&VMC", "&AVS", "&GVCE" )
-  $result     = $host.ui.PromptForChoice($title, $message, $options, 0) 
-  switch ($result) {
-      0 {  $vCenterType = "ONPREM"  }
-      1 {  $vCenterType = "VMC"     }
-      2 {  $vCenterType = "AVS"     }
-      3 {  $vCenterType = "GVCE"    }
-  }
+    if ( $vCenterType -eq "" ) {
+        Write-Host "ERROR! vCenter type specified is blank" -ForegroundColor RED
+    } else {
+        Write-Host "ERROR! vCenter type specified is incorrect" -ForegroundColor RED
+    }
+    $title      = "Choose which type of vCenter - OnPrem, VMware Cloud, Amazon, Google Cloud"
+    $message    = ""
+    $Options    = [System.Management.Automation.Host.ChoiceDescription[]] @("&OnPrem", "&VMC", "&AVS", "&GVCE" )
+    $result     = $host.ui.PromptForChoice($title, $message, $options, 0) 
+    switch ($result) {
+        0 {  $vCenterType = "ONPREM"  }
+        1 {  $vCenterType = "VMC"     }
+        2 {  $vCenterType = "AVS"     }
+        3 {  $vCenterType = "GVCE"    }
+    }
 }
 Write-Host "vCenter Type set to " -ForegroundColor Cyan -NoNewline
 Write-Host "$($vCenterType.ToUpper())"  -ForegroundColor GREEN

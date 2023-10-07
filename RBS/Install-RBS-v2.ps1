@@ -34,6 +34,9 @@
 .PARAMETER ChangeRBSCredentialOnly
     CLI switch to signal to only change user/pw on server. Does not download/copy/install RBS. 
 
+.PARAMETER OpenWindowsFirewall
+    CLI switch to signal to open ports 12800/12801TCP for RBS.  
+
 .PARAMETER Path
     Location to download and extract RBS to. Default C:\Temp
 
@@ -85,6 +88,9 @@ param(
 
     #Skip RBS install, change RBS user/pw only
     [switch]$ChangeRBSCredentialOnly,
+
+    #Open Windows Firewall ports (12800/12801 TCP)
+    [switch]$OpenWindowsFirewall,
 
     #Local Location to store download of RBS
     [string]$Path = "c:\temp"
@@ -421,6 +427,35 @@ foreach($Computer in $ValidComputerList){
         #EndRegion Setting SeServiceLoginRight on remote computer to allow run as a service
     }
     #EndRegion Set Run as user. Skip if RBSUserName=LocalSystem
+
+
+
+    #Region OpenFirewall ports (windows builtin firewall only)
+    if ($OpenWindowsFirewall) {
+        #WARNING: Opens Windows Firewall to all IPs
+        try {
+            Invoke-Command -ComputerName $Computer -ScriptBlock { 
+                Write-Host "Adding Firewall Rule for 12800/12801 TCP from any remote IP on all profiles"  -ForegroundColor Cyan
+                $RBSFirewallRule = @{
+                    DisplayName  = "Rubrik Backup Service"
+                    Profile      = @('Domain', 'Private', 'Public') 
+                    Direction    = 'Inbound'
+                    Action       = 'Allow'
+                    Protocol     = 'TCP'
+                    LocalPort    = @(12800, 12801)
+                }
+                if ( Get-NetFirewallRule | ? { $_.displayname -match $RBSFirewallRule.DisplayName } ){
+                    Write-Host "  > WARNING! Rule named $($RBSFirewallRule.DisplayName) already exists. Please check manually" -ForegroundColor YELLOW
+                } else {
+                    $result = New-NetFirewallRule @RBSFirewallRule
+                }
+            } 
+        } catch {
+            Write-Host "ERROR! Could not open windows firewall ports (12800/12801TCP). Please check manually" -ForegroundColor RED
+            continue
+        }
+    }
+    #EndRegion OpenFirewall ports (windows firewall only)
 
 
 

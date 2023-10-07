@@ -158,6 +158,8 @@ if (-not $ChangeRBSCredentialOnly) {
         $RubrikCluster = Read-Host -Prompt "Please enter Rubrik Cluster Name or IP to download RBS from"
         write-host
     }
+} else {
+    Write-Host "Change RBS Credential Only specified on command line. Skipping RBS download" -ForegroundColor GREEN
 }
 #EndRegion RubrikCluster
 
@@ -300,7 +302,7 @@ foreach($Computer in $ValidComputerList){
 
 
 
-        #region Install the RBS on the Remote Computer
+        #Region Install the RBS on the Remote Computer
         Write-Host "Installing RBS on $Computer. Please wait" -ForegroundColor CYAN
         $Session = New-PSSession -ComputerName $Computer 
         try {
@@ -314,7 +316,7 @@ foreach($Computer in $ValidComputerList){
             continue    
         }
         Remove-PSSession -Session $Session
-        #endregion
+        #EndRegion Install the RBS on the Remote Computer
 
 
 

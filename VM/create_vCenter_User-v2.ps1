@@ -69,6 +69,8 @@ param (
   # vCenter credential file to use. 
   [string]$vCenterCredFile
 )
+
+
 $LineSepDashes = "-" * 150
 write-host $LineSepDashes
 Write-Host ""

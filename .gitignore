@@ -8,3 +8,6 @@ Export-RubrikDatabasesJobFile - DN Test.json
 .devcontainer/library-scripts/common-debian.sh
 vcenter_cred*.xml
 settings.json
+.github
+.vscode
+.DS_Store

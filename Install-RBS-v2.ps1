@@ -444,7 +444,7 @@ foreach($Computer in $ValidComputerList){
                     Protocol     = 'TCP'
                     LocalPort    = @(12800, 12801)
                 }
-                if ( Get-NetFirewallRule | ? { $_.displayname -match $RBSFirewallRule.DisplayName } ){
+                if ( Get-NetFirewallRule | Where-Object { $_.displayname -match $RBSFirewallRule.DisplayName } ){
                     Write-Host "  > WARNING! Rule named $($RBSFirewallRule.DisplayName) already exists. Please check manually" -ForegroundColor YELLOW
                 } else {
                     $result = New-NetFirewallRule @RBSFirewallRule
